@@ -56,6 +56,29 @@ def maybe_download_pretrained_vgg(data_dir):
 
         # Remove zip file to save space
         os.remove(os.path.join(vgg_path, vgg_filename))
+    else:
+        print('Pretrained vgg model found.')
+
+def modify_picture(image, label):
+    
+    # flip
+    if np.random.rand() > 0.5:
+        image = np.fliplr(image)
+        label = np.fliplr(label)
+    
+    # rotate    
+    if np.random.rand() > 0.5:
+        max_angle = 5
+        image = scipy.ndimage.interpolation.rotate(image, random.uniform(-max_angle, max_angle))
+        label = scipy.ndimage.interpolation.rotate(label, random.uniform(-max_angle, max_angle))
+    
+    # shift
+    #if np.random.rand() > 0.5:
+        #max_zoom = 1.3
+        #image = scipy.ndimage.interpolation.shift(image, random.uniform(-1, 1))    
+        #label = scipy.ndimage.interpolation.shift(label, random.uniform(-1, 1))    
+    
+    return image, label
 
 
 def gen_batch_function(data_folder, image_shape):
@@ -91,6 +114,9 @@ def gen_batch_function(data_folder, image_shape):
                 gt_bg = gt_bg.reshape(*gt_bg.shape, 1)
                 gt_image = np.concatenate((gt_bg, np.invert(gt_bg)), axis=2)
 
+                # randomly shift, flip, zoom images
+                #image, gt_image = modify_picture(image, gt_image)
+
                 images.append(image)
                 gt_images.append(gt_image)
 
@@ -117,7 +143,7 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
             {keep_prob: 1.0, image_pl: [image]})
         im_softmax = im_softmax[0][:, 1].reshape(image_shape[0], image_shape[1])
         segmentation = (im_softmax > 0.5).reshape(image_shape[0], image_shape[1], 1)
-        mask = np.dot(segmentation, np.array([[0, 255, 0, 127]]))
+        mask = np.dot(segmentation, np.array([[255, 0, 0, 127]]))
         mask = scipy.misc.toimage(mask, mode="RGBA")
         street_im = scipy.misc.toimage(image)
         street_im.paste(mask, box=None, mask=mask)
@@ -134,7 +160,6 @@ def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_p
 
     # Run NN on test images and save them to HD
     print('Training Finished. Saving test images to: {}'.format(output_dir))
-    image_outputs = gen_test_output(
-        sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
+    image_outputs = gen_test_output(sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
     for name, image in image_outputs:
         scipy.misc.imsave(os.path.join(output_dir, name), image)
